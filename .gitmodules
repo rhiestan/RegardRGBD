@@ -1,0 +1,3 @@
+[submodule "submodules/QtOSG"]
+	path = submodules/QtOSG
+	url = https://github.com/Pseudomanifold/QtOSG.git

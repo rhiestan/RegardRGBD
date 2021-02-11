@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="icon">
+    <file>openni_icon.ico</file>
+    <file>openni_icon.png</file>
+  </qresource>
+</RCC>
