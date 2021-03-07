@@ -104,11 +104,44 @@ FIND_PACKAGE(OpenSceneGraph 3.0.0 REQUIRED osgFX osgPresentation osgVolume
 SET(ALL_SRC ${ALL_SRC}
 	RegardRGBDMain.cpp
 	RegardRGBDMainWindow.cpp
+	ONI3DConverter.cpp
+	ONIDevice.cpp
+	ONIListener.cpp
+	Stitcher.cpp
+	RegardRGBDModelViewHelper.cpp
+	ONIToQtConverter.cpp
+	PixmapLabel.cpp
+	ScanImageTo3D.cpp
+	third_party/QtOSG/OSGWidget.cpp
+	third_party/QtOSG/PickHandler.cpp
 )
 
 SET(ALL_HEADERS ${ALL_HEADERS}
 	RegardRGBDMainWindow.h
+	ONI3DConverter.h
+	ONIDevice.h
+	ONIListener.h
+	Stitcher.h
+	StitcherI.h
+	Vector.h
+	RegardRGBDModelViewHelper.h
+	ONIToQtConverter.h
+	PixmapLabel.h
+	ConverterInterface.h
+	ScanImageTo3D.h
+	version.h
+	third_party/QtOSG/OSGWidget.h
+	third_party/QtOSG/PickHandler.h
 )
+
+# Utils
+SET(UTILS_SRC
+	utilities/R3DFontHandler.cpp
+	utilities/R3DFontHandler.h
+	utilities/Conversions.cpp
+	utilities/Conversions.h
+)
+SOURCE_GROUP("Utils" FILES ${UTILS_SRC})
 
 IF(WIN32)
 	SET(ALL_SRC ${ALL_SRC} res/regardrgbd.rc)
@@ -122,7 +155,7 @@ qt5_add_resources(QRC_src ${RES_FILES})
 # Move all generated files into a separate group
 SOURCE_GROUP("qt_generated" FILES ${UISrcs} ${QRC_src})
 
-ADD_EXECUTABLE(RegardRGBD WIN32 ${ALL_SRC} ${ALL_HEADERS} ${UISrcs} ${QRC_src})
+ADD_EXECUTABLE(RegardRGBD WIN32 ${ALL_SRC} ${ALL_HEADERS} ${UTILS_SRC} ${UISrcs} ${QRC_src})
 
 TARGET_LINK_LIBRARIES(RegardRGBD
 	Open3D::Open3D ${OPENNI_LIBRARIES} ${OpenCV_LIBRARIES}
@@ -131,6 +164,7 @@ TARGET_LINK_LIBRARIES(RegardRGBD
 
 target_include_directories(RegardRGBD
 	PUBLIC ${CMAKE_BINARY_DIR} ${OPENSCENEGRAPH_INCLUDE_DIRS}
+	PRIVATE third_party/QtOSG
 )
 target_link_directories(RegardRGBD
 	PUBLIC ${OSG_PLUGINS_DIR})

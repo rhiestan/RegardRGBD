@@ -10,6 +10,12 @@
 #include "open3d/Open3D.h"
 
 #include "RegardRGBDMainWindow.h"
+#include "utilities/R3DFontHandler.h"
+#include "ONIDevice.h"
+#include "ONIToQtConverter.h"
+#include "ONI3DConverter.h"
+#include "ScanImageTo3D.h"
+#include "utilities/Conversions.h"
 
 // Qt
 #include <QFileDialog>
@@ -46,14 +52,21 @@ RegardRGBDMainWindow::RegardRGBDMainWindow()
 {
 	this->setupUi(this);
 
+	pRegardRGBDModelViewHelper_ = std::make_unique<RegardRGBDModelViewHelper>();
+	//pRegardRGBDModelViewHelper_->setViewer(openGLWidget->getViewer().get());
+
 	setWindowIcon(QIcon(":/icon/openni_icon.png"));
 
 	// Set up action signals and slots
 	connect(actionExit, &QAction::triggered, this, &QWidget::close);
 	connect(actionAbout, &QAction::triggered, this, &RegardRGBDMainWindow::slotAbout);
+	connect(actionConnect_with_OpenNI, &QAction::triggered, this, &RegardRGBDMainWindow::slotConnectOpenNI);
+	connect(actionDisconnect, &QAction::triggered, this, &RegardRGBDMainWindow::slotDisconnectOpenNI);
+
+	QObject::connect(this, &RegardRGBDMainWindow::scan3DMeshChanged,
+		this, &RegardRGBDMainWindow::slotScan3DMeshChanged, Qt::ConnectionType::QueuedConnection);
 
 	QTimer::singleShot(1, this, SLOT(slotOneShotTimer()));
-
 }
 
 RegardRGBDMainWindow::~RegardRGBDMainWindow()
@@ -66,8 +79,9 @@ void RegardRGBDMainWindow::closeEvent(QCloseEvent* event)
 	bool userAnswer = true;
 	if (userAnswer)
 	{
-		// TODO: Move to OpenNIDevice
-		openni::OpenNI::shutdown();
+		slotDisconnectOpenNI();
+
+		ONIDevice::shutdownOpenNI();
 
 		event->accept();
 	}
@@ -116,6 +130,106 @@ void RegardRGBDMainWindow::slotAbout()
 
 void RegardRGBDMainWindow::slotOneShotTimer()
 {
-	// Move to OpenNIDevice
-	openni::Status rc = openni::OpenNI::initialize();
+
+	R3DFontHandler::getInstance().initialize();
+
+	/*osg::ref_ptr<osg::Node> model;
+	model = pRegardRGBDModelViewHelper_->createRegard3DTextModel();
+
+	osg::ref_ptr<osgViewer::View> view4 = openGLWidget->getView4();
+	view4->setSceneData(model.get());
+	openGLWidget->update();*/
+
+	if (!ONIDevice::initializeOpenNI())
+	{
+		QMessageBox msgBox(this);
+		msgBox.setIcon(QMessageBox::Icon::Critical);
+		msgBox.setText(tr("Could not initialize OpenNI!"));
+		msgBox.setInformativeText(tr("Please make sure OpenNI drivers are correctly installed"));
+		msgBox.exec();
+
+		this->close();
+	}
+}
+
+void RegardRGBDMainWindow::slotConnectOpenNI()
+{
+	pONIDevice_.reset(new ONIDevice());
+	bool isOK = pONIDevice_->connectDevice();
+	if (isOK)
+	{
+		pONIToQtConverter_ = std::unique_ptr<ONIToQtConverter>(new ONIToQtConverter);
+		pONIToQtConverter_->setup(nullptr);
+		pONIToQtConverter_->setLabels(topLeftLabel, topRightLabel);
+
+		pONIDevice_->setConverter(pONIToQtConverter_.get());
+
+		pONI3DConverter_ = std::unique_ptr<ONI3DConverter>(new ONI3DConverter);
+		pScanImageTo3D_ = std::unique_ptr<ScanImageTo3D>(new ScanImageTo3D);
+		pScanImageTo3D_->setMainFrame(this);
+		pONI3DConverter_->setup(pScanImageTo3D_.get());
+		pONIDevice_->setConverter(pONI3DConverter_.get());
+
+	}
+	else
+	{
+		QMessageBox msgBox(this);
+		msgBox.setIcon(QMessageBox::Icon::Critical);
+		msgBox.setText(tr("Could not connect to ONI device"));
+		msgBox.setInformativeText(QString::fromLatin1(pONIDevice_->getLastErrorString()));
+		msgBox.exec();
+
+		pONIDevice_.release();
+	}
+}
+
+void RegardRGBDMainWindow::slotDisconnectOpenNI()
+{
+	if (pONIDevice_)
+	{
+		pONIDevice_->pause();
+
+		pONIDevice_->disconnectDevice();
+
+		pONIToQtConverter_->cleanup();
+		pONI3DConverter_->cleanup();
+	}
+}
+
+/**
+ * This method emits the scan3DMeshChanged signal.
+ *
+ * This method can be called from any thread, since it is connected
+ * via a queued connection with the slot slotScan3DMeshChanged.
+ */
+void RegardRGBDMainWindow::update3DScanMesh()
+{
+	if(!isDrawingScan3DMesh_)
+		emit scan3DMeshChanged();
+}
+
+/**
+ * Will be called by the signal scan3DMeshChanged.
+ *
+ * Since it is connected via a queued connection, this slot
+ * is always called from the main message loop in the main thread.
+ */
+void RegardRGBDMainWindow::slotScan3DMeshChanged()
+{
+	if (pScanImageTo3D_)
+	{
+		isDrawingScan3DMesh_ = true;
+
+		BOOST_SCOPE_EXIT(&isDrawingScan3DMesh_) {
+			isDrawingScan3DMesh_ = false;
+		} BOOST_SCOPE_EXIT_END
+
+		//const auto mesh = pScanImageTo3D_->getTriangleMesh();
+		//auto aa = Conversions::convertOpen3DToOSG(mesh);
+
+		const auto pc = pScanImageTo3D_->getPointCloud();
+		auto aa = Conversions::convertOpen3DToOSG(pc);
+
+		bottomLeftOpenGLWidget->setGeometry(aa);
+	}
 }
